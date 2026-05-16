@@ -548,14 +548,12 @@ async function loadTracklist(release) {
 
 function playNextTrack(release) {
   if (trackQueue.length === 0 || trackIndex >= trackQueue.length) {
-    // Geen tracks meer op deze plaat, ga naar volgende plaat
     playTrack(currentIndex + 1);
     return;
   }
   const track = trackQueue[trackIndex];
   trackIndex++;
 
-  // Update "now meta" met track info
   const artist = release.artist;
   const trackTitle = track.title;
   const position = track.position ? `[${track.position}]` : '';
@@ -566,7 +564,27 @@ function playNextTrack(release) {
     `${release.title} ${position} ◈ ${[release.label, release.year].filter(Boolean).join(' ◈ ')}`.toUpperCase();
 
   setBadge('loading');
-  searchAndPlay({ artist, title: trackTitle, _release: release });
+
+  // Gebruik Discogs videoId als die beschikbaar is
+  if (track.videoId) {
+    console.log('Discogs video gevonden:', track.videoId, track.videoTitle);
+    playVideoById(track.videoId);
+  } else {
+    // Geen Discogs video — zoek op YouTube
+    const query = trackTitle.toLowerCase().includes('untitled') || trackTitle.length < 3
+      ? `${artist} ${release.title} ${position}`
+      : `${artist} ${trackTitle}`;
+    searchAndPlay({ artist, title: query, _release: release });
+  }
+}
+
+function playVideoById(videoId) {
+  clearTimeout(skipTimer);
+  if (!ytReady || !ytPlayer) {
+    skipTimer = setTimeout(() => playVideoById(videoId), 1000);
+    return;
+  }
+  ytPlayer.loadVideoById(videoId);
 }
 
 function updateNowPlaying(track) {

@@ -32,7 +32,8 @@ async def get_collection(username: str, page: int = 1):
 
 @app.get("/api/tracklist/{release_id}")
 async def get_tracklist(release_id: int):
-    """Haal de tracklist op van een Discogs release."""
+    """Haal de tracklist en YouTube videos op van een Discogs release."""
+    import re
     async with httpx.AsyncClient(timeout=15) as client:
         r = await client.get(
             f"https://api.discogs.com/releases/{release_id}",
@@ -40,15 +41,38 @@ async def get_tracklist(release_id: int):
             headers={"User-Agent": "VinylFM/1.0 +https://github.com/arruzas"}
         )
         data = r.json()
+
+        # Haal YouTube video IDs op uit de videos sectie
+        videos = []
+        for v in data.get("videos", []):
+            uri = v.get("uri", "")
+            title = v.get("title", "")
+            match = re.search(r"(?:v=|youtu\\.be/)([a-zA-Z0-9_-]{11})", uri)
+            if match:
+                videos.append({
+                    "videoId": match.group(1),
+                    "title": title,
+                    "uri": uri
+                })
+
         tracks = []
-        for t in data.get("tracklist", []):
+        for i, t in enumerate(data.get("tracklist", [])):
             if t.get("type_") == "track" and t.get("title"):
+                # Koppel video aan track op basis van volgorde
+                video = videos[i] if i < len(videos) else None
                 tracks.append({
                     "title": t["title"],
                     "duration": t.get("duration", ""),
-                    "position": t.get("position", "")
+                    "position": t.get("position", ""),
+                    "videoId": video["videoId"] if video else None,
+                    "videoTitle": video["title"] if video else None
                 })
-        return {"tracks": tracks, "release_id": release_id}
+
+        return {
+            "tracks": tracks,
+            "videos": videos,
+            "release_id": release_id
+        }
 
 @app.get("/api/ytsearch")
 async def youtube_search(q: str):
