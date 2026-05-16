@@ -15,13 +15,20 @@ async def root():
 
 @app.get("/api/collection/{username}")
 async def get_collection(username: str, page: int = 1):
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(timeout=30) as client:
         r = await client.get(
             f"https://api.discogs.com/users/{username}/collection/folders/0/releases",
             params={"page": page, "per_page": 100, "token": DISCOGS_TOKEN},
-            headers={"User-Agent": "VinylFM/1.0"}
+            headers={"User-Agent": "VinylFM/1.0 +https://github.com/arruzas"}
         )
-        return r.json()
+        data = r.json()
+        if "pagination" not in data:
+            return {
+                "pagination": {"pages": 1, "page": 1, "items": 0},
+                "releases": [],
+                "debug": data
+            }
+        return data
 
 @app.get("/api/soundcloud")
 async def soundcloud_search(q: str):
