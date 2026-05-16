@@ -395,6 +395,7 @@ async function initRadio() {
       const res = await fetch(`/api/collection/${encodeURIComponent(username)}?page=${page}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      if (data.debug) throw new Error('Discogs: ' + JSON.stringify(data.debug));
       total = data.pagination.pages;
       data.releases.forEach(r => {
         const bi = r.basic_information;
@@ -424,9 +425,12 @@ async function initRadio() {
 
 // ── BROADCAST ─────────────────────────────────────────────────────────
 function startBroadcast() {
+  console.log('Collectie geladen:', allReleases.length, 'releases');
+  console.log('Eerste 3:', allReleases.slice(0,3).map(r => r.title));
   document.getElementById('setup').style.display = 'none';
   document.getElementById('radio').style.display = 'flex';
   buildBlockQueue();
+  console.log('Blokken:', blockQueue.map(b => b.genre + ': ' + b.tracks.length));
   loadNextBlock();
 }
 
@@ -442,9 +446,17 @@ function groupByGenre() {
 }
 
 function buildBlockQueue() {
-  blockQueue = shuffle(groupByGenre()).map(([genre, releases]) => ({
+  const groups = groupByGenre();
+  if (groups.length === 0) {
+    // Geen genres gevonden, gebruik alle releases als één blok
+    blockQueue = [{ genre: 'COLLECTIE', tracks: shuffle(allReleases).slice(0, 12) }];
+    return;
+  }
+  blockQueue = shuffle(groups).map(([genre, releases]) => ({
     genre, tracks: shuffle(releases).slice(0, Math.min(releases.length, 10))
   }));
+  // Voeg altijd een "alles" blok toe aan het einde
+  blockQueue.push({ genre: 'MIXED', tracks: shuffle(allReleases).slice(0, 12) });
 }
 
 function matchesGenreGroup(r, key) {
@@ -464,9 +476,10 @@ function switchToGenre(key) {
 function loadNextBlock() {
   if (manualGenre) {
     const filtered = allReleases.filter(r => matchesGenreGroup(r, manualGenre));
-    const tracks = shuffle(filtered.length ? filtered : allReleases).slice(0, 12);
+    const pool = filtered.length >= 3 ? filtered : allReleases;
+    const tracks = shuffle(pool).slice(0, 12);
     const labels = {elektronisch:'ELEKTRONISCH', hiphop:'HIP HOP', reggae:'REGGAE / DUB / ROCKSTEADY'};
-    currentBlock = {genre: labels[manualGenre], tracks};
+    currentBlock = {genre: labels[manualGenre] + (filtered.length < 3 ? ' (hele collectie)' : ''), tracks};
   } else {
     if (blockIndex >= blockQueue.length) { buildBlockQueue(); blockIndex = 0; }
     currentBlock = blockQueue[blockIndex++];
