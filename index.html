@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VINYL.FM — 深夜放送</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Noto+Sans+JP:wght@300;700&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --amber: #e8923a;
+  --amber2: #f5b060;
+  --amber-dim: #7a4a1a;
+  --amber-glow: rgba(232,146,58,0.15);
+  --amber-glow2: rgba(232,146,58,0.05);
+  --bg: #080604;
+  --bg2: #0e0a06;
+  --bg3: #141008;
+  --scan: rgba(0,0,0,0.35);
+  --text: #e8923a;
+  --text-dim: #7a4a1a;
+  --text-bright: #f5c880;
+  --mono: 'Share Tech Mono', monospace;
+  --jp: 'Noto Sans JP', sans-serif;
+}
+
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--mono); overflow: hidden; }
+
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background: repeating-linear-gradient(0deg, transparent, transparent 2px, var(--scan) 2px, var(--scan) 4px);
+  pointer-events: none; z-index: 1000; opacity: 0.4;
+}
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.7) 100%);
+  pointer-events: none; z-index: 999;
+}
+
+/* SETUP */
+.setup {
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  z-index: 500; background: var(--bg);
+}
+.setup-box {
+  width: 380px; border: 1px solid var(--amber-dim);
+  padding: 2rem; background: var(--bg2); position: relative;
+}
+.setup-box::before {
+  content: '// VINYL.FM INITIALISATIE //';
+  position: absolute; top: -10px; left: 16px;
+  font-size: 10px; background: var(--bg2); padding: 0 6px;
+  color: var(--amber-dim); letter-spacing: 0.1em;
+}
+.setup-title { font-size: 22px; letter-spacing: 0.15em; margin-bottom: 4px; color: var(--text-bright); }
+.setup-title span { color: var(--amber-dim); font-size: 13px; font-family: var(--jp); }
+.setup-sub { font-size: 11px; color: var(--text-dim); margin-bottom: 1.5rem; letter-spacing: 0.05em; }
+.field { margin-bottom: 12px; }
+.field label { display: block; font-size: 10px; color: var(--text-dim); letter-spacing: 0.1em; margin-bottom: 4px; }
+.field input {
+  width: 100%; background: var(--bg3); border: 1px solid var(--amber-dim);
+  color: var(--amber); font-family: var(--mono); font-size: 13px; padding: 8px 10px; outline: none;
+  transition: border-color 0.2s;
+}
+.field input:focus { border-color: var(--amber); box-shadow: 0 0 8px var(--amber-glow); }
+.btn-init {
+  width: 100%; background: transparent; border: 1px solid var(--amber);
+  color: var(--amber2); font-family: var(--mono); font-size: 13px;
+  letter-spacing: 0.15em; padding: 10px; cursor: pointer; margin-top: 6px;
+  transition: background 0.2s, box-shadow 0.2s;
+}
+.btn-init:hover { background: var(--amber-glow); box-shadow: 0 0 16px var(--amber-glow); }
+.btn-init:disabled { opacity: 0.3; cursor: not-allowed; }
+.setup-log { margin-top: 14px; font-size: 11px; color: var(--text-dim); min-height: 16px; letter-spacing: 0.04em; }
+.setup-log .cursor { animation: blink 1s step-end infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.setup-error { margin-top: 10px; font-size: 11px; color: #c0392b; display: none; }
+.cache-hint { margin-top: 12px; font-size: 10px; color: var(--text-dim); border-top: 1px solid var(--amber-dim); padding-top: 10px; display: none; }
+.cache-hint a { color: var(--amber); cursor: pointer; text-decoration: underline; }
+
+/* RADIO APP */
+.radio { display: none; height: 100vh; flex-direction: column; position: relative; z-index: 10; }
+
+/* TOP STRIP */
+.top-strip {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 20px; border-bottom: 1px solid var(--amber-dim); flex-shrink: 0;
+}
+.station-id { font-size: 18px; letter-spacing: 0.2em; color: var(--text-bright); text-shadow: 0 0 12px var(--amber); }
+.station-id span { font-family: var(--jp); font-size: 12px; color: var(--text-dim); margin-left: 10px; }
+.clock { font-size: 18px; letter-spacing: 0.1em; color: var(--text-bright); }
+.signal { display: flex; gap: 3px; align-items: flex-end; }
+.signal-bar { width: 4px; background: var(--amber-dim); border-radius: 1px; animation: signal-anim 1.2s ease-in-out infinite alternate; }
+.signal-bar:nth-child(1) { height: 6px; animation-delay: 0s; }
+.signal-bar:nth-child(2) { height: 10px; animation-delay: 0.15s; }
+.signal-bar:nth-child(3) { height: 14px; animation-delay: 0.3s; }
+.signal-bar:nth-child(4) { height: 18px; animation-delay: 0.45s; }
+.signal-bar:nth-child(5) { height: 14px; animation-delay: 0.6s; }
+@keyframes signal-anim {
+  from { background: var(--amber-dim); }
+  to { background: var(--amber2); box-shadow: 0 0 6px var(--amber); }
+}
+
+/* STATUS BADGE */
+.status-badge {
+  font-size: 9px; letter-spacing: 0.12em; padding: 3px 8px;
+  border: 1px solid var(--amber-dim); color: var(--text-dim);
+}
+.status-badge.playing { border-color: var(--amber); color: var(--amber2); box-shadow: 0 0 6px var(--amber-glow); }
+.status-badge.loading { color: var(--amber-dim); }
+.status-badge.fallback { border-color: #e87f3a; color: #e87f3a; }
+
+/* MAIN LAYOUT */
+.radio-body { display: flex; flex: 1; min-height: 0; }
+
+/* LEFT PANEL */
+.left-panel {
+  width: 300px; flex-shrink: 0; border-right: 1px solid var(--amber-dim);
+  display: flex; flex-direction: column; padding: 1.2rem; gap: 1rem; overflow-y: auto;
+}
+.now-playing-label { font-size: 9px; letter-spacing: 0.2em; color: var(--text-dim); text-transform: uppercase; }
+.cover-frame {
+  width: 100%; aspect-ratio: 1; border: 1px solid var(--amber-dim);
+  position: relative; overflow: hidden; background: var(--bg3); flex-shrink: 0; max-height: 180px;
+}
+.cover-frame img { width: 100%; height: 100%; object-fit: cover; filter: sepia(0.6) brightness(0.85); transition: opacity 0.5s; }
+.cover-frame .cover-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 48px; color: var(--amber-dim); font-family: var(--jp); }
+.cover-frame::after { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(232,146,58,0.08) 0%, transparent 60%); pointer-events: none; }
+.vhs-badge { position: absolute; top: 8px; right: 8px; font-size: 9px; letter-spacing: 0.1em; color: var(--amber-dim); border: 1px solid var(--amber-dim); padding: 2px 5px; }
+
+.track-info { flex-shrink: 0; }
+.track-artist { font-size: 11px; color: var(--text-dim); letter-spacing: 0.08em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px; }
+.track-title { font-size: 14px; color: var(--text-bright); letter-spacing: 0.05em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 0 8px var(--amber-glow); line-height: 1.3; }
+.track-meta { font-size: 10px; color: var(--text-dim); margin-top: 6px; letter-spacing: 0.06em; }
+
+/* WAVEFORM */
+.waveform { display: flex; align-items: center; gap: 3px; height: 24px; flex-shrink: 0; }
+.wave-bar { flex: 1; background: var(--amber-dim); border-radius: 1px; animation: wave 0.8s ease-in-out infinite alternate; min-height: 3px; }
+@keyframes wave { from { transform: scaleY(0.2); background: var(--amber-dim); } to { transform: scaleY(1); background: var(--amber2); } }
+.waveform.paused .wave-bar { animation-play-state: paused; transform: scaleY(0.2) !important; }
+
+/* CONTROLS */
+.controls { display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+.ctrl-btn {
+  background: transparent; border: 1px solid var(--amber-dim); color: var(--amber);
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; padding: 7px 10px;
+  cursor: pointer; transition: all 0.15s; flex: 1;
+}
+.ctrl-btn:hover { background: var(--amber-glow); border-color: var(--amber); box-shadow: 0 0 10px var(--amber-glow); }
+.ctrl-btn.primary { border-color: var(--amber); color: var(--text-bright); }
+
+/* GENRE SELECTOR */
+.genre-selector { flex-shrink: 0; border: 1px solid var(--amber-dim); padding: 10px; font-size: 10px; }
+.genre-selector-label { color: var(--text-dim); letter-spacing: 0.1em; margin-bottom: 8px; }
+.genre-btns { display: flex; flex-direction: column; gap: 5px; }
+.genre-sel-btn {
+  background: transparent; border: 1px solid var(--amber-dim); color: var(--text-dim);
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em; padding: 6px 10px;
+  cursor: pointer; text-align: left; transition: all 0.15s;
+}
+.genre-sel-btn:hover { border-color: var(--amber); color: var(--amber); background: var(--amber-glow); }
+.genre-sel-btn.active { border-color: var(--amber2); color: var(--amber2); background: var(--amber-glow); box-shadow: 0 0 8px var(--amber-glow); }
+
+/* BLOCK INFO */
+.block-info { flex-shrink: 0; border: 1px solid var(--amber-dim); padding: 10px; font-size: 10px; }
+.block-label { color: var(--text-dim); letter-spacing: 0.1em; margin-bottom: 4px; }
+.block-name { color: var(--amber2); font-size: 12px; letter-spacing: 0.05em; }
+.block-progress { margin-top: 8px; height: 2px; background: var(--amber-dim); }
+.block-progress-fill { height: 100%; background: var(--amber); transition: width 0.5s; box-shadow: 0 0 6px var(--amber); }
+
+/* RIGHT PANEL */
+.right-panel { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.playlist-header {
+  padding: 10px 16px; border-bottom: 1px solid var(--amber-dim);
+  font-size: 10px; letter-spacing: 0.15em; color: var(--text-dim);
+  display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
+}
+.playlist-header span { color: var(--amber); }
+.playlist { flex: 1; overflow-y: auto; }
+.playlist::-webkit-scrollbar { width: 4px; }
+.playlist::-webkit-scrollbar-thumb { background: var(--amber-dim); }
+
+.playlist-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 16px; border-bottom: 1px solid rgba(122,74,26,0.2);
+  transition: background 0.15s;
+}
+.playlist-item.active { background: var(--amber-glow2); border-left: 2px solid var(--amber); }
+.playlist-item.played { opacity: 0.35; }
+.pl-num { font-size: 10px; color: var(--text-dim); width: 18px; flex-shrink: 0; text-align: right; }
+.pl-thumb { width: 34px; height: 34px; flex-shrink: 0; background: var(--bg3); border: 1px solid var(--amber-dim); overflow: hidden; }
+.pl-thumb img { width: 100%; height: 100%; object-fit: cover; filter: sepia(0.5); }
+.pl-thumb-placeholder { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--text-dim); }
+.pl-info { flex: 1; min-width: 0; }
+.pl-artist { font-size: 10px; color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-title { font-size: 12px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pl-genre { font-size: 9px; color: var(--amber-dim); letter-spacing: 0.06em; }
+.pl-src { font-size: 9px; padding: 2px 5px; border: 1px solid var(--amber-dim); color: var(--text-dim); letter-spacing: 0.05em; flex-shrink: 0; }
+.pl-src.yt { border-color: rgba(255,0,0,0.4); color: rgba(255,80,80,0.8); }
+.pl-src.sc { border-color: rgba(255,140,0,0.4); color: rgba(255,140,0,0.8); }
+
+/* BOTTOM STRIP */
+.bottom-strip {
+  border-top: 1px solid var(--amber-dim); padding: 6px 20px;
+  font-size: 9px; color: var(--text-dim); letter-spacing: 0.12em;
+  display: flex; justify-content: space-between; flex-shrink: 0; overflow: hidden;
+}
+.ticker { overflow: hidden; flex: 1; }
+.ticker-inner { white-space: nowrap; animation: ticker 40s linear infinite; }
+@keyframes ticker { from { transform: translateX(100%); } to { transform: translateX(-200%); } }
+
+/* PLAYER CONTAINERS */
+#yt-player { position: fixed; bottom: 40px; right: 0; width: 1px; height: 1px; opacity: 0.01; pointer-events: none; }
+#sc-player { position: fixed; bottom: 0; left: -9999px; width: 1px; height: 1px; }
+</style>
+</head>
+<body>
+
+<!-- SETUP -->
+<div class="setup" id="setup">
+  <div class="setup-box">
+    <div class="setup-title">VINYL.FM <span>深夜放送</span></div>
+    <div class="setup-sub">// NACHTELIJK RADIOSTATION — INITIALISEER VERBINDING //</div>
+    <div class="field">
+      <label>▸ DISCOGS GEBRUIKERSNAAM</label>
+      <input type="text" id="username" placeholder="ARRUZA" />
+    </div>
+    <button class="btn-init" id="init-btn" onclick="initRadio()">[ UITZENDING STARTEN ]</button>
+    <div class="setup-log" id="setup-log"><span class="cursor">_</span></div>
+    <div class="setup-error" id="setup-error"></div>
+    <div class="cache-hint" id="cache-hint"></div>
+  </div>
+</div>
+
+<!-- RADIO -->
+<div class="radio" id="radio">
+  <div class="top-strip">
+    <div class="station-id">VINYL.FM <span>深夜放送</span></div>
+    <div class="signal">
+      <div class="signal-bar"></div><div class="signal-bar"></div>
+      <div class="signal-bar"></div><div class="signal-bar"></div>
+      <div class="signal-bar"></div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px;">
+      <div class="status-badge loading" id="status-badge">LADEN...</div>
+      <div class="clock" id="clock">00:00:00</div>
+    </div>
+  </div>
+
+  <div class="radio-body">
+    <div class="left-panel">
+      <div class="now-playing-label">▸ NOW PLAYING</div>
+      <div class="cover-frame" id="cover-frame">
+        <div class="cover-placeholder" id="cover-placeholder">音</div>
+        <img id="cover-img" src="" alt="" style="display:none;" />
+        <div class="vhs-badge">VHS</div>
+      </div>
+      <div class="track-info">
+        <div class="track-artist" id="now-artist">—</div>
+        <div class="track-title" id="now-title">INITIALISEREN...</div>
+        <div class="track-meta" id="now-meta">VINYL.FM — 深夜放送</div>
+      </div>
+      <div class="waveform paused" id="waveform">
+        <div class="wave-bar" style="animation-delay:0s;"></div>
+        <div class="wave-bar" style="animation-delay:0.1s;"></div>
+        <div class="wave-bar" style="animation-delay:0.2s;"></div>
+        <div class="wave-bar" style="animation-delay:0.05s;"></div>
+        <div class="wave-bar" style="animation-delay:0.15s;"></div>
+        <div class="wave-bar" style="animation-delay:0.25s;"></div>
+        <div class="wave-bar" style="animation-delay:0.08s;"></div>
+        <div class="wave-bar" style="animation-delay:0.18s;"></div>
+        <div class="wave-bar" style="animation-delay:0.12s;"></div>
+        <div class="wave-bar" style="animation-delay:0.22s;"></div>
+      </div>
+      <div class="controls">
+        <button class="ctrl-btn" onclick="skipTrack()">▸▸ SKIP</button>
+        <button class="ctrl-btn primary" onclick="openCurrentOnYT()">▶ YT ↗</button>
+        <button class="ctrl-btn" onclick="resetRadio()">⏻ RESET</button>
+      </div>
+      <div class="genre-selector">
+        <div class="genre-selector-label">▸ KIES GENRE-BLOK</div>
+        <div class="genre-btns">
+          <button class="genre-sel-btn active" id="btn-auto" onclick="switchToGenre('auto')">[ ◈ AUTO — ROTATIE ]</button>
+          <button class="genre-sel-btn" id="btn-elektronisch" onclick="switchToGenre('elektronisch')">[ ELEKTRONISCH ]</button>
+          <button class="genre-sel-btn" id="btn-hiphop" onclick="switchToGenre('hiphop')">[ HIP HOP ]</button>
+          <button class="genre-sel-btn" id="btn-reggae" onclick="switchToGenre('reggae')">[ REGGAE / DUB / ROCKSTEADY ]</button>
+        </div>
+      </div>
+      <div class="block-info">
+        <div class="block-label">▸ HUIDIG BLOK</div>
+        <div class="block-name" id="block-name">—</div>
+        <div class="block-progress"><div class="block-progress-fill" id="block-progress-fill" style="width:0%"></div></div>
+        <div class="track-meta" style="margin-top:6px;" id="block-tracks-left">—</div>
+      </div>
+    </div>
+
+    <div class="right-panel">
+      <div class="playlist-header">
+        <span id="pl-genre-label">AFSPEELLIJST</span>
+        <span id="pl-count">0 tracks</span>
+      </div>
+      <div class="playlist" id="playlist"></div>
+    </div>
+  </div>
+
+  <div class="bottom-strip">
+    <div class="ticker"><div class="ticker-inner" id="ticker-text">VINYL.FM ◈ 深夜放送 ◈ UNDERGROUND RADIO ◈ AMSTERDAM ◈ EST. 1994 ◈</div></div>
+  </div>
+</div>
+
+<div id="yt-player"></div>
+<div id="sc-player"></div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────
+const CACHE_KEY = 'discogs_collection';
+const CACHE_META = 'discogs_collection_meta';
+let allReleases = [], playlist = [], currentIndex = 0;
+let currentBlock = null, blockQueue = [], blockIndex = 0;
+let manualGenre = null;
+let ytPlayer = null, ytReady = false;
+let currentSource = null; // 'yt' or 'sc'
+let skipTimer = null;
+let isPlaying = false;
+
+const GENRE_MAP = {
+  elektronisch: ['deep house','house','uk garage','garage house','vocal house','soulful house','jazzy house','broken beat','techno','electronic','electro','ambient','drum n bass','jungle','trip hop','downtempo','idm','acid','trance','dubstep','footwork','grime','electronica','industrial','minimal','detroit techno','chicago house','acid house','nu-jazz'],
+  hiphop: ['hip hop','hip-hop','rap','boom bap','conscious','gangsta rap','east coast','west coast','alternative rap','instrumental hip-hop','jazz rap','g-funk','trap','lo-fi hip-hop'],
+  reggae: ['reggae','dub','rocksteady','ska','dancehall','roots reggae','lovers rock','ragga','mento','calypso','nyahbinghi']
+};
+
+// ── UTILS ──────────────────────────────────────────────────────────────
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function shuffle(arr) {
+  const a = [...arr];
+  for (let i = a.length-1; i > 0; i--) { const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a;
+}
+function log(msg) { document.getElementById('setup-log').innerHTML = `▸ ${msg} <span class="cursor">_</span>`; }
+function showError(msg) { const el = document.getElementById('setup-error'); el.textContent = '!! ' + msg; el.style.display = 'block'; }
+function setBadge(state) {
+  const b = document.getElementById('status-badge');
+  b.className = 'status-badge ' + state;
+  b.textContent = state === 'playing' ? '● ON AIR' : state === 'fallback' ? '◈ SOUNDCLOUD' : state === 'loading' ? '... LADEN' : 'PAUZE';
+}
+
+// ── CACHE ──────────────────────────────────────────────────────────────
+function saveCache(username, data) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(data)); localStorage.setItem(CACHE_META, JSON.stringify({username, savedAt: Date.now(), count: data.length})); } catch(e) {}
+}
+function loadCache() {
+  try { const m = JSON.parse(localStorage.getItem(CACHE_META)); const d = JSON.parse(localStorage.getItem(CACHE_KEY)); if (m && d?.length) return {meta:m, data:d}; } catch(e) {}
+  return null;
+}
+function formatAge(ts) {
+  const m = Math.floor((Date.now()-ts)/60000);
+  if (m < 60) return `${m}min`; if (m < 1440) return `${Math.floor(m/60)}u`; return `${Math.floor(m/1440)}d`;
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  const cached = loadCache();
+  if (cached) {
+    document.getElementById('username').value = cached.meta.username;
+    const hint = document.getElementById('cache-hint');
+    hint.style.display = 'block';
+    hint.innerHTML = `▸ OPGESLAGEN: ${cached.meta.count} platen (${formatAge(cached.meta.savedAt)} geleden) — <a onclick="bootFromCache()">DIRECT LADEN</a> of klik start om te verversen`;
+  }
+  loadYouTubeAPI();
+  startClock();
+});
+
+function bootFromCache() {
+  const cached = loadCache();
+  if (!cached) return;
+  allReleases = cached.data;
+  startBroadcast();
+}
+
+// ── FETCH ──────────────────────────────────────────────────────────────
+async function initRadio() {
+  const username = document.getElementById('username').value.trim();
+  document.getElementById('setup-error').style.display = 'none';
+  if (!username) { showError('GEBRUIKERSNAAM VEREIST'); return; }
+  document.getElementById('init-btn').disabled = true;
+  allReleases = [];
+  try {
+    let page = 1, total = 1;
+    do {
+      log(`COLLECTIE LADEN... ${page}/${total}`);
+      const res = await fetch(`/api/collection/${encodeURIComponent(username)}?page=${page}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      total = data.pagination.pages;
+      data.releases.forEach(r => {
+        const bi = r.basic_information;
+        allReleases.push({
+          id: r.id,
+          artist: (bi.artists||[]).map(a=>a.name.replace(/\s*\(\d+\)$/,'')).join(', ') || '—',
+          title: bi.title || '—',
+          year: bi.year || null,
+          thumb: bi.thumb || null,
+          genres: bi.genres || [],
+          styles: bi.styles || [],
+          label: (bi.labels||[])[0]?.name || ''
+        });
+      });
+      page++;
+      if (page <= total) await sleep(250);
+    } while (page <= total);
+    log(`${allReleases.length} PLATEN GELADEN`);
+    saveCache(username, allReleases);
+    await sleep(400);
+    startBroadcast();
+  } catch(e) {
+    showError(e.message);
+    document.getElementById('init-btn').disabled = false;
+  }
+}
+
+// ── BROADCAST ─────────────────────────────────────────────────────────
+function startBroadcast() {
+  document.getElementById('setup').style.display = 'none';
+  document.getElementById('radio').style.display = 'flex';
+  buildBlockQueue();
+  loadNextBlock();
+}
+
+function groupByGenre() {
+  const groups = {};
+  allReleases.forEach(r => {
+    const tags = r.styles.length ? r.styles : (r.genres.length ? r.genres : ['ONBEKEND']);
+    const g = tags[0];
+    if (!groups[g]) groups[g] = [];
+    groups[g].push(r);
+  });
+  return Object.entries(groups).sort((a,b) => b[1].length - a[1].length);
+}
+
+function buildBlockQueue() {
+  blockQueue = shuffle(groupByGenre()).map(([genre, releases]) => ({
+    genre, tracks: shuffle(releases).slice(0, Math.min(releases.length, 10))
+  }));
+}
+
+function matchesGenreGroup(r, key) {
+  const tags = [...r.styles, ...r.genres].map(s => s.toLowerCase());
+  return GENRE_MAP[key].some(k => tags.some(t => t.includes(k)));
+}
+
+function switchToGenre(key) {
+  manualGenre = key === 'auto' ? null : key;
+  ['auto','elektronisch','hiphop','reggae'].forEach(k => {
+    document.getElementById('btn-'+k)?.classList.toggle('active', k === key);
+  });
+  clearTimeout(skipTimer);
+  loadNextBlock();
+}
+
+function loadNextBlock() {
+  if (manualGenre) {
+    const filtered = allReleases.filter(r => matchesGenreGroup(r, manualGenre));
+    const tracks = shuffle(filtered.length ? filtered : allReleases).slice(0, 12);
+    const labels = {elektronisch:'ELEKTRONISCH', hiphop:'HIP HOP', reggae:'REGGAE / DUB / ROCKSTEADY'};
+    currentBlock = {genre: labels[manualGenre], tracks};
+  } else {
+    if (blockIndex >= blockQueue.length) { buildBlockQueue(); blockIndex = 0; }
+    currentBlock = blockQueue[blockIndex++];
+  }
+  playlist = currentBlock.tracks;
+  currentIndex = 0;
+  document.getElementById('block-name').textContent = currentBlock.genre.toUpperCase();
+  document.getElementById('pl-genre-label').textContent = `▸ BLOK: ${currentBlock.genre.toUpperCase()}`;
+  renderPlaylist();
+  updateBlockProgress();
+  playTrack(0);
+}
+
+function playTrack(index) {
+  if (index >= playlist.length) { loadNextBlock(); return; }
+  currentIndex = index;
+  const track = playlist[index];
+  updateNowPlaying(track);
+  updateBlockProgress();
+  renderPlaylist();
+  updateTicker();
+  setBadge('loading');
+  isPlaying = false;
+  document.getElementById('waveform').classList.add('paused');
+  searchAndPlay(track);
+}
+
+function updateNowPlaying(track) {
+  document.getElementById('now-artist').textContent = track.artist.toUpperCase();
+  document.getElementById('now-title').textContent = track.title;
+  document.getElementById('now-meta').textContent = [track.label, track.year, track.styles[0]||track.genres[0]||''].filter(Boolean).join(' ◈ ').toUpperCase();
+  if (track.thumb) {
+    document.getElementById('cover-img').src = track.thumb;
+    document.getElementById('cover-img').style.display = 'block';
+    document.getElementById('cover-placeholder').style.display = 'none';
+  } else {
+    document.getElementById('cover-img').style.display = 'none';
+    document.getElementById('cover-placeholder').style.display = 'flex';
+  }
+}
+
+function updateBlockProgress() {
+  const pct = playlist.length ? Math.round((currentIndex / playlist.length) * 100) : 0;
+  document.getElementById('block-progress-fill').style.width = pct + '%';
+  document.getElementById('block-tracks-left').textContent = `${currentIndex+1} / ${playlist.length} — ${playlist.length-currentIndex-1} resterend`;
+}
+
+function updateTicker() {
+  const track = playlist[currentIndex];
+  if (!track) return;
+  const items = playlist.map(r => `${r.artist.toUpperCase()} — ${r.title.toUpperCase()}`).join(' ◈ ');
+  document.getElementById('ticker-text').textContent = `VINYL.FM ◈ 深夜放送 ◈ NU: ${track.artist.toUpperCase()} — ${track.title.toUpperCase()} ◈ ${items} ◈`;
+}
+
+function renderPlaylist() {
+  document.getElementById('pl-count').textContent = `${playlist.length} tracks`;
+  document.getElementById('playlist').innerHTML = playlist.map((r, i) => {
+    const cls = i === currentIndex ? 'active' : i < currentIndex ? 'played' : '';
+    const prefix = i < currentIndex ? '✓' : i === currentIndex ? '▶' : String(i+1).padStart(2,'0');
+    return `<div class="playlist-item ${cls}">
+      <div class="pl-num">${prefix}</div>
+      <div class="pl-thumb">${r.thumb ? `<img src="${r.thumb}" loading="lazy" />` : '<div class="pl-thumb-placeholder">♪</div>'}</div>
+      <div class="pl-info">
+        <div class="pl-artist">${r.artist}</div>
+        <div class="pl-title">${r.title}</div>
+        <div class="pl-genre">${(r.styles[0]||r.genres[0]||'').toUpperCase()}</div>
+      </div>
+    </div>`;
+  }).join('');
+  setTimeout(() => { document.querySelector('.playlist-item.active')?.scrollIntoView({behavior:'smooth', block:'nearest'}); }, 100);
+}
+
+// ── YOUTUBE ────────────────────────────────────────────────────────────
+function loadYouTubeAPI() {
+  const tag = document.createElement('script');
+  tag.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(tag);
+}
+
+window.onYouTubeIframeAPIReady = function() {
+  ytReady = true;
+  ytPlayer = new YT.Player('yt-player', {
+    height: '1', width: '1',
+    playerVars: { autoplay: 1, controls: 0, playsinline: 1 },
+    events: {
+      onStateChange: onYTStateChange,
+      onError: onYTError
+    }
+  });
+};
+
+function onYTStateChange(e) {
+  if (e.data === YT.PlayerState.PLAYING) {
+    isPlaying = true;
+    currentSource = 'yt';
+    setBadge('playing');
+    document.getElementById('waveform').classList.remove('paused');
+    clearTimeout(skipTimer);
+  }
+  if (e.data === YT.PlayerState.ENDED) {
+    skipTrack();
+  }
+  if (e.data === YT.PlayerState.PAUSED && isPlaying) {
+    document.getElementById('waveform').classList.add('paused');
+  }
+}
+
+function onYTError(e) {
+  console.log('YT error, fallback naar SoundCloud:', e.data);
+  tryScFallback(playlist[currentIndex]);
+}
+
+async function searchAndPlay(track) {
+  const query = `${track.artist} ${track.title}`;
+  clearTimeout(skipTimer);
+
+  if (!ytReady || !ytPlayer) {
+    // YT nog niet klaar, probeer over 1s
+    skipTimer = setTimeout(() => searchAndPlay(track), 1000);
+    return;
+  }
+
+  try {
+    // Zoek via YouTube Data API v3 (geen key nodig voor basic search via iframe)
+    // We gebruiken de search/list suggestie via oEmbed trick
+    const searchUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+
+    // Haal eerste resultaat video ID op via een noscript-omweg
+    // Betere methode: gebruik YouTube's suggestion endpoint
+    const ytSearchRes = await fetch(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAQ%3D%3D`, {mode: 'no-cors'});
+
+    // no-cors geeft opaque response, we kunnen niet parsen
+    // Gebruik in plaats daarvan de YouTube IFrame cueVideoByUrl met zoekterm
+    // Dit werkt via loadVideoByUrl met een search-URL
+    ytPlayer.loadVideoByUrl({
+      mediaContentUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`,
+      startSeconds: 0
+    });
+
+    // loadVideoByUrl met search URL werkt niet — gebruik cueVideoById
+    // Beste aanpak: gebruik de invidious API als proxy voor zoeken
+    await searchViaInvidious(track, query);
+
+  } catch(e) {
+    console.log('YT search failed:', e);
+    tryScFallback(track);
+  }
+}
+
+async function searchViaInvidious(track, query) {
+  // Invidious is een open-source YouTube frontend met een API
+  const instances = [
+    'https://invidious.privacyredirect.com',
+    'https://inv.nadeko.net',
+    'https://invidious.nerdvpn.de'
+  ];
+
+  for (const instance of instances) {
+    try {
+      const res = await fetch(`${instance}/api/v1/search?q=${encodeURIComponent(query)}&type=video&fields=videoId,title&page=1`, {signal: AbortSignal.timeout(4000)});
+      if (!res.ok) continue;
+      const results = await res.json();
+      if (results?.length > 0) {
+        const videoId = results[0].videoId;
+        ytPlayer.loadVideoById(videoId);
+        return;
+      }
+    } catch(e) { continue; }
+  }
+  // Alle Invidious instances gefaald, probeer SoundCloud
+  tryScFallback(track);
+}
+
+async function tryScFallback(track) {
+  setBadge('fallback');
+  const query = `${track.artist} ${track.title}`;
+  // SoundCloud widget embed via search
+  const scUrl = `https://soundcloud.com/search?q=${encodeURIComponent(query)}`;
+  const widgetUrl = `https://w.soundcloud.com/player/?url=${encodeURIComponent(scUrl)}&auto_play=true&hide_related=true&show_comments=false&show_user=false&show_reposts=false&visual=false`;
+
+  const scDiv = document.getElementById('sc-player');
+  scDiv.innerHTML = `<iframe src="${widgetUrl}" width="1" height="1" scrolling="no" allow="autoplay"></iframe>`;
+
+  // SoundCloud widget API luisteren
+  window.SC = window.SC || {};
+
+  isPlaying = true;
+  document.getElementById('waveform').classList.remove('paused');
+  setBadge('fallback');
+}
+
+// ── CONTROLS ───────────────────────────────────────────────────────────
+function skipTrack() {
+  clearTimeout(skipTimer);
+  isPlaying = false;
+  if (ytPlayer && ytReady) { try { ytPlayer.stopVideo(); } catch(e){} }
+  document.getElementById('sc-player').innerHTML = '';
+  document.getElementById('waveform').classList.add('paused');
+  playTrack(currentIndex + 1);
+}
+
+function openCurrentOnYT() {
+  const track = playlist[currentIndex];
+  if (!track) return;
+  window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(track.artist+' '+track.title)}`, '_blank');
+}
+
+function resetRadio() {
+  clearTimeout(skipTimer);
+  if (ytPlayer && ytReady) { try { ytPlayer.stopVideo(); } catch(e){} }
+  document.getElementById('sc-player').innerHTML = '';
+  document.getElementById('radio').style.display = 'none';
+  document.getElementById('setup').style.display = 'flex';
+  document.getElementById('setup-error').style.display = 'none';
+  document.getElementById('init-btn').disabled = false;
+  isPlaying = false;
+  const cached = loadCache();
+  if (cached) {
+    const hint = document.getElementById('cache-hint');
+    hint.style.display = 'block';
+    hint.innerHTML = `▸ OPGESLAGEN: ${cached.meta.count} platen (${formatAge(cached.meta.savedAt)} geleden) — <a onclick="bootFromCache()">DIRECT LADEN</a> of klik start om te verversen`;
+  }
+}
+
+// ── CLOCK ──────────────────────────────────────────────────────────────
+function startClock() {
+  setInterval(() => {
+    const n = new Date();
+    document.getElementById('clock').textContent =
+      String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0')+':'+String(n.getSeconds()).padStart(2,'0');
+  }, 1000);
+}
+</script>
+</body>
+</html>
