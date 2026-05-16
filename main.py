@@ -30,9 +30,48 @@ async def get_collection(username: str, page: int = 1):
             }
         return data
 
+@app.get("/api/tracklist/{release_id}")
+async def get_tracklist(release_id: int):
+    """Haal de tracklist op van een Discogs release."""
+    async with httpx.AsyncClient(timeout=15) as client:
+        r = await client.get(
+            f"https://api.discogs.com/releases/{release_id}",
+            params={"token": DISCOGS_TOKEN},
+            headers={"User-Agent": "VinylFM/1.0 +https://github.com/arruzas"}
+        )
+        data = r.json()
+        tracks = []
+        for t in data.get("tracklist", []):
+            if t.get("type_") == "track" and t.get("title"):
+                tracks.append({
+                    "title": t["title"],
+                    "duration": t.get("duration", ""),
+                    "position": t.get("position", "")
+                })
+        return {"tracks": tracks, "release_id": release_id}
+
+@app.get("/api/ytsearch")
+async def youtube_search(q: str):
+    """Zoek een YouTube video ID via de YouTube suggestie API (geen key nodig)."""
+    import re
+    async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+        # YouTube geeft video IDs terug in de initiële HTML
+        r = await client.get(
+            "https://www.youtube.com/results",
+            params={"search_query": q, "sp": "EgIQAQ%3D%3D"},
+            headers={
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept-Language": "nl-NL,nl;q=0.9,en;q=0.8"
+            }
+        )
+        # Zoek video IDs in de HTML response
+        video_ids = re.findall(r'"videoId":"([a-zA-Z0-9_-]{11})"', r.text)
+        if video_ids:
+            return {"videoId": video_ids[0], "query": q}
+        return {"videoId": None, "query": q}
+
 @app.get("/api/soundcloud")
 async def soundcloud_search(q: str):
-    # SoundCloud oEmbed lookup
     async with httpx.AsyncClient() as client:
         r = await client.get(
             "https://soundcloud.com/oembed",

@@ -324,9 +324,13 @@ let allReleases = [], playlist = [], currentIndex = 0;
 let currentBlock = null, blockQueue = [], blockIndex = 0;
 let manualGenre = null;
 let ytPlayer = null, ytReady = false;
-let currentSource = null; // 'yt' or 'sc'
+let currentSource = null;
 let skipTimer = null;
 let isPlaying = false;
+
+// Track-level state
+let trackQueue = [];   // tracks van huidige plaat
+let trackIndex = 0;    // huidige track binnen de plaat
 
 const GENRE_MAP = {
   elektronisch: ['deep house','house','uk garage','garage house','vocal house','soulful house','jazzy house','broken beat','techno','electronic','electro','ambient','drum n bass','jungle','trip hop','downtempo','idm','acid','trance','dubstep','footwork','grime','electronica','industrial','minimal','detroit techno','chicago house','acid house','nu-jazz'],
@@ -496,15 +500,55 @@ function loadNextBlock() {
 function playTrack(index) {
   if (index >= playlist.length) { loadNextBlock(); return; }
   currentIndex = index;
-  const track = playlist[index];
-  updateNowPlaying(track);
+  const release = playlist[index];
+  updateNowPlaying(release);
   updateBlockProgress();
   renderPlaylist();
   updateTicker();
   setBadge('loading');
   isPlaying = false;
   document.getElementById('waveform').classList.add('paused');
-  searchAndPlay(track);
+  // Haal tracklist op en speel eerste track af
+  loadTracklist(release);
+}
+
+async function loadTracklist(release) {
+  trackQueue = [];
+  trackIndex = 0;
+  try {
+    const res = await fetch(`/api/tracklist/${release.id}`);
+    const data = await res.json();
+    if (data.tracks && data.tracks.length > 0) {
+      trackQueue = data.tracks;
+    }
+  } catch(e) {
+    console.log('Tracklist ophalen mislukt:', e);
+  }
+  // Speel eerste track af (of de plaat zelf als er geen tracks zijn)
+  playNextTrack(release);
+}
+
+function playNextTrack(release) {
+  if (trackQueue.length === 0 || trackIndex >= trackQueue.length) {
+    // Geen tracks meer op deze plaat, ga naar volgende plaat
+    playTrack(currentIndex + 1);
+    return;
+  }
+  const track = trackQueue[trackIndex];
+  trackIndex++;
+
+  // Update "now meta" met track info
+  const artist = release.artist;
+  const trackTitle = track.title;
+  const position = track.position ? `[${track.position}]` : '';
+
+  document.getElementById('now-artist').textContent = artist.toUpperCase();
+  document.getElementById('now-title').textContent = trackTitle;
+  document.getElementById('now-meta').textContent =
+    `${release.title} ${position} ◈ ${[release.label, release.year].filter(Boolean).join(' ◈ ')}`.toUpperCase();
+
+  setBadge('loading');
+  searchAndPlay({ artist, title: trackTitle, _release: release });
 }
 
 function updateNowPlaying(track) {
@@ -580,7 +624,8 @@ function onYTStateChange(e) {
     clearTimeout(skipTimer);
   }
   if (e.data === YT.PlayerState.ENDED) {
-    skipTrack();
+    // Volgende track op dezelfde plaat
+    playNextTrack(playlist[currentIndex]);
   }
   if (e.data === YT.PlayerState.PAUSED && isPlaying) {
     document.getElementById('waveform').classList.add('paused');
@@ -678,7 +723,12 @@ function skipTrack() {
   if (ytPlayer && ytReady) { try { ytPlayer.stopVideo(); } catch(e){} }
   document.getElementById('sc-player').innerHTML = '';
   document.getElementById('waveform').classList.add('paused');
-  playTrack(currentIndex + 1);
+  // Skip naar volgende track op deze plaat, of volgende plaat als die op is
+  if (trackQueue.length > 0 && trackIndex < trackQueue.length) {
+    playNextTrack(playlist[currentIndex]);
+  } else {
+    playTrack(currentIndex + 1);
+  }
 }
 
 function openCurrentOnYT() {
