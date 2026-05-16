@@ -313,8 +313,17 @@ body::after {
   </div>
 </div>
 
-<div id="yt-player"></div>
+<div id="yt-player" style="position:fixed;bottom:40px;right:10px;width:320px;height:180px;border:1px solid #7a4a1a;z-index:50;display:none;"></div>
+<div id="yt-toggle" style="position:fixed;bottom:10px;right:10px;z-index:51;display:none;">
+  <button onclick="toggleYTVisible()" style="background:#0e0a06;border:1px solid #7a4a1a;color:#e8923a;font-family:'Share Tech Mono',monospace;font-size:10px;padding:4px 8px;cursor:pointer;letter-spacing:0.1em;">▣ YT SCHERM</button>
+</div>
 <div id="sc-player"></div>
+<div id="play-overlay" style="position:fixed;inset:0;background:rgba(8,6,4,0.92);z-index:200;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:20px;">
+  <div style="font-family:'Share Tech Mono',monospace;color:#f5b060;font-size:24px;letter-spacing:0.2em;">VINYL.FM</div>
+  <div style="font-family:'Share Tech Mono',monospace;color:#7a4a1a;font-size:11px;letter-spacing:0.1em;">深夜放送 — NACHTELIJK RADIOSTATION</div>
+  <button onclick="userStartPlay()" style="background:transparent;border:2px solid #e8923a;color:#f5b060;font-family:'Share Tech Mono',monospace;font-size:16px;letter-spacing:0.2em;padding:16px 40px;cursor:pointer;margin-top:10px;transition:all 0.2s;" onmouseover="this.style.background='rgba(232,146,58,0.15)'" onmouseout="this.style.background='transparent'">[ ▶ UITZENDING STARTEN ]</button>
+  <div style="font-family:'Share Tech Mono',monospace;color:#7a4a1a;font-size:9px;letter-spacing:0.08em;">klik om audio te activeren</div>
+</div>
 
 <script>
 // ── STATE ──────────────────────────────────────────────────────────────
@@ -430,12 +439,21 @@ async function initRadio() {
 // ── BROADCAST ─────────────────────────────────────────────────────────
 function startBroadcast() {
   console.log('Collectie geladen:', allReleases.length, 'releases');
-  console.log('Eerste 3:', allReleases.slice(0,3).map(r => r.title));
   document.getElementById('setup').style.display = 'none';
   document.getElementById('radio').style.display = 'flex';
   buildBlockQueue();
-  console.log('Blokken:', blockQueue.map(b => b.genre + ': ' + b.tracks.length));
-  loadNextBlock();
+  // Laad de eerste block/playlist maar speel nog NIET af — wacht op gebruikersklik
+  if (blockQueue.length === 0) { buildBlockQueue(); }
+  currentBlock = blockQueue[0];
+  blockIndex = 1;
+  playlist = currentBlock.tracks;
+  currentIndex = 0;
+  document.getElementById('block-name').textContent = currentBlock.genre.toUpperCase();
+  document.getElementById('pl-genre-label').textContent = `▸ BLOK: ${currentBlock.genre.toUpperCase()}`;
+  renderPlaylist();
+  updateBlockProgress();
+  updateTicker();
+  // Play overlay is al zichtbaar — wacht op klik
 }
 
 function groupByGenre() {
@@ -717,6 +735,24 @@ async function tryScFallback(track) {
 }
 
 // ── CONTROLS ───────────────────────────────────────────────────────────
+let ytVisible = false;
+function toggleYTVisible() {
+  ytVisible = !ytVisible;
+  document.getElementById('yt-player').style.display = ytVisible ? 'block' : 'none';
+}
+
+function userStartPlay() {
+  document.getElementById('play-overlay').style.display = 'none';
+  document.getElementById('yt-toggle').style.display = 'block';
+  // Forceer audio context door een stille klik
+  if (ytPlayer && ytReady) {
+    ytPlayer.playVideo();
+    setTimeout(() => ytPlayer.stopVideo(), 100);
+  }
+  // Laad eerste track opnieuw
+  playTrack(currentIndex);
+}
+
 function skipTrack() {
   clearTimeout(skipTimer);
   isPlaying = false;
